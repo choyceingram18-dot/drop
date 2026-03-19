@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchWeather, searchBeautyStores } from './lib/api';
 import { assessHairRisk, plannerRecommendation } from './lib/hairEngine';
-import { mockStores, mockWeather } from './lib/mockData';
-import { BeautyStore, DayForecast, HairProfile, WeatherSnapshot } from './types';
+import { mockForecast, mockStores, mockWeather } from './lib/mockData';
+import { ApiState, BeautyStore, DayForecast, HairProfile, WeatherSnapshot } from './types';
 
 type Tab = 'Home' | 'Planner' | 'Locator' | 'Profile';
 
@@ -13,28 +13,104 @@ const starterProfile: HairProfile = {
 };
 
 const styleOptions = ['Silk press', 'Wig', 'Braids', 'Loc style', 'Twist-out', 'Wash-and-go'];
+const PROFILE_KEY = 'crowncast_profile';
+const SAVED_STORES_KEY = 'crowncast_saved_stores';
+
+function loadProfile(): HairProfile {
+  const raw = localStorage.getItem(PROFILE_KEY);
+  if (!raw) return starterProfile;
+
+  try {
+    return JSON.parse(raw) as HairProfile;
+  } catch {
+    return starterProfile;
+  }
+}
+
+function loadSavedStoreIds(): string[] {
+  const raw = localStorage.getItem(SAVED_STORES_KEY);
+  if (!raw) return [];
+
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [];
+  }
+}
 
 export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('Home');
   const [city, setCity] = useState('Atlanta');
   const [weather, setWeather] = useState<WeatherSnapshot>(mockWeather);
-  const [forecast, setForecast] = useState<DayForecast[]>([]);
+  const [forecast, setForecast] = useState<DayForecast[]>(mockForecast);
   const [profile, setProfile] = useState<HairProfile>(starterProfile);
   const [stores, setStores] = useState<BeautyStore[]>(mockStores);
+  const [savedStoreIds, setSavedStoreIds] = useState<string[]>([]);
   const [search, setSearch] = useState('edge control');
   const [openNow, setOpenNow] = useState(false);
   const [nearbyOnly, setNearbyOnly] = useState(false);
   const [blackOwned, setBlackOwned] = useState(false);
+  const [weatherState, setWeatherState] = useState<ApiState>({ loading: false, error: '' });
+  const [storesState, setStoresState] = useState<ApiState>({ loading: false, error: '' });
 
   useEffect(() => {
-    fetchWeather(city).then((data) => {
-      setWeather(data.current);
-      setForecast(data.forecast);
-    });
+    setProfile(loadProfile());
+    setSavedStoreIds(loadSavedStoreIds());
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    localStorage.setItem(SAVED_STORES_KEY, JSON.stringify(savedStoreIds));
+  }, [savedStoreIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWeatherState({ loading: true, error: '' });
+
+    fetchWeather(city)
+      .then((data) => {
+        if (cancelled) return;
+        setWeather(data.current);
+        setForecast(data.forecast);
+        setWeatherState({ loading: false, error: '' });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWeatherState({
+          loading: false,
+          error: 'Live weather is unavailable right now. Showing trusted fallback data.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [city]);
 
   useEffect(() => {
-    searchBeautyStores(search).then(setStores);
+    let cancelled = false;
+    setStoresState({ loading: true, error: '' });
+
+    searchBeautyStores(search)
+      .then((results) => {
+        if (cancelled) return;
+        setStores(results.length ? results : mockStores);
+        setStoresState({ loading: false, error: '' });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStoresState({
+          loading: false,
+          error: 'Store search is currently limited. Showing curated nearby options.',
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [search]);
 
   const assessment = useMemo(() => assessHairRisk(weather, profile), [weather, profile]);
@@ -50,6 +126,11 @@ export function App(): JSX.Element {
     [stores, openNow, nearbyOnly, blackOwned],
   );
 
+  const savedStores = useMemo(
+    () => filteredStores.filter((store) => savedStoreIds.includes(store.id)),
+    [filteredStores, savedStoreIds],
+  );
+
   const emergencyItems = useMemo(() => {
     if (assessment.status === 'Safe Hair Day') return ['Travel satin scarf', 'Light finishing serum'];
     if (assessment.status === 'Proceed With Caution') return ['Mini umbrella', 'Edge control pen', 'Hold spray'];
@@ -57,6 +138,19 @@ export function App(): JSX.Element {
     if (assessment.status === 'Weather Damage Likely') return ['Protective wrap', 'Waterproof hood', 'Strong hold gel'];
     return ['Braiding hair', 'Satin-lined cap', 'Scalp oil', 'Wide-tooth comb'];
   }, [assessment.status]);
+
+  function toggleSavedStore(id: string): void {
+    setSavedStoreIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+  }
+
+  function activateEmergencyMode(): void {
+    setTab('Locator');
+    setSearch(emergencyItems[0]?.toLowerCase() ?? 'anti-humidity spray');
+  }
+
+  function getStoreDirectionsUrl(address: string): string {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  }
 
   return (
     <div className="app-shell">
@@ -71,7 +165,7 @@ export function App(): JSX.Element {
         </label>
       </header>
 
-      <nav className="tabbar">
+      <nav className="tabbar" aria-label="Primary navigation">
         {(['Home', 'Planner', 'Locator', 'Profile'] as Tab[]).map((item) => (
           <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>
             {item}
@@ -80,6 +174,9 @@ export function App(): JSX.Element {
       </nav>
 
       <main className="content">
+        {weatherState.error && <p className="service-note">{weatherState.error}</p>}
+        {storesState.error && tab === 'Locator' && <p className="service-note">{storesState.error}</p>}
+
         {tab === 'Home' && (
           <section className="stack">
             <article className="card weather-card">
@@ -91,7 +188,7 @@ export function App(): JSX.Element {
               <div className="metrics">
                 <div>
                   <span>Humidity</span>
-                  <strong>{weather.humidity}%</strong>
+                  <strong className="emphasis">{weather.humidity}%</strong>
                 </div>
                 <div>
                   <span>Rain</span>
@@ -136,8 +233,8 @@ export function App(): JSX.Element {
             <article className="card emergency-card">
               <div className="row-between">
                 <h3>Hair Emergency</h3>
-                <button className="soft-btn" onClick={() => setTab('Locator')}>
-                  View Nearby Stores
+                <button className="soft-btn" onClick={activateEmergencyMode}>
+                  Build emergency list
                 </button>
               </div>
               <p>{assessment.explanation}</p>
@@ -162,6 +259,9 @@ export function App(): JSX.Element {
                   <p>{day.description}</p>
                   <p>
                     {day.temp}° · {day.humidity}% humidity
+                  </p>
+                  <p>
+                    {day.rainChance}% rain · {day.windSpeed} mph wind
                   </p>
                   <p className="tip">Recommended: {plannerRecommendation(day, profile)}</p>
                 </article>
@@ -202,23 +302,48 @@ export function App(): JSX.Element {
                 </label>
               </div>
             </div>
+
+            {storesState.loading && <p className="service-note">Loading stores...</p>}
+
             {filteredStores.map((store) => (
               <article key={store.id} className="card store-card">
                 <div>
                   <h3>{store.name}</h3>
                   <p>{store.address}</p>
                   <p>
-                    {store.distanceKm} km · {store.rating.toFixed(1)} rating ·{' '}
-                    {store.openNow ? 'Open now' : 'Closed'}
+                    {store.distanceKm} km · {store.rating.toFixed(1)} rating · {store.openNow ? 'Open now' : 'Closed'}
                   </p>
                 </div>
                 <div className="actions">
-                  <button className="soft-btn">Get directions</button>
-                  <button className="soft-btn">Call store</button>
-                  <button className="soft-btn">Save store</button>
+                  <a className="soft-btn link-btn" href={getStoreDirectionsUrl(store.address)} target="_blank" rel="noreferrer">
+                    Get directions
+                  </a>
+                  {store.phone ? (
+                    <a className="soft-btn link-btn" href={`tel:${store.phone}`}>
+                      Call store
+                    </a>
+                  ) : (
+                    <button className="soft-btn" disabled>
+                      Call store
+                    </button>
+                  )}
+                  <button className="soft-btn" onClick={() => toggleSavedStore(store.id)}>
+                    {savedStoreIds.includes(store.id) ? 'Saved' : 'Save store'}
+                  </button>
                 </div>
               </article>
             ))}
+
+            {!!savedStores.length && (
+              <article className="card">
+                <h3>Saved Stores</h3>
+                <ul>
+                  {savedStores.map((store) => (
+                    <li key={`saved-${store.id}`}>{store.name}</li>
+                  ))}
+                </ul>
+              </article>
+            )}
           </section>
         )}
 
@@ -285,6 +410,10 @@ export function App(): JSX.Element {
           </section>
         )}
       </main>
+
+      {(weatherState.loading || (tab === 'Locator' && storesState.loading)) && (
+        <div className="loading-strip">Updating your forecast...</div>
+      )}
     </div>
   );
 }

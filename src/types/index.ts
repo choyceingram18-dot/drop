@@ -47,3 +47,8 @@ export interface BeautyStore {
   address: string;
   blackOwned?: boolean;
 }
+
+export interface ApiState {
+  loading: boolean;
+  error: string;
+}

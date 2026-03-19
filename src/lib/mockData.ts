@@ -67,4 +67,14 @@ export const mockStores: BeautyStore[] = [
     address: '990 Glenwood Ave',
     blackOwned: true,
   },
+  {
+    id: '4',
+    name: 'Silk Press Beauty Market',
+    distanceKm: 4.7,
+    rating: 4.4,
+    openNow: true,
+    phone: '(404) 555-0113',
+    address: '77 Moreland Ave',
+    blackOwned: false,
+  },
 ];

@@ -26,14 +26,15 @@ li,
 button,
 input,
 select,
-label {
+label,
+a {
   font-family: Inter, system-ui, sans-serif;
 }
 
 .app-shell {
   margin: 0 auto;
-  max-width: 540px;
-  padding: 1rem 1rem 5rem;
+  max-width: 560px;
+  padding: 1rem 1rem 6.4rem;
 }
 
 .header {
@@ -74,6 +75,9 @@ select {
   grid-template-columns: repeat(4, 1fr);
   padding: 0.25rem;
   box-shadow: 0 10px 25px rgba(26, 26, 26, 0.08);
+  position: sticky;
+  top: 0.8rem;
+  z-index: 2;
 }
 
 .tabbar button {
@@ -128,6 +132,10 @@ select {
   font-size: 1rem;
 }
 
+.emphasis {
+  color: #7a375f;
+}
+
 .row-between {
   display: flex;
   justify-content: space-between;
@@ -147,7 +155,7 @@ select {
   display: grid;
   gap: 0.7rem;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(170px, 1fr);
+  grid-auto-columns: minmax(190px, 1fr);
   overflow-x: auto;
   padding-bottom: 0.2rem;
 }
@@ -178,6 +186,12 @@ ul {
   border-radius: 12px;
   padding: 0.55rem 0.72rem;
   font-size: 0.82rem;
+  color: #1a1a1a;
+}
+
+.link-btn {
+  display: inline-flex;
+  text-decoration: none;
 }
 
 .pill-wrap {
@@ -231,6 +245,27 @@ fieldset {
 legend {
   margin-bottom: 0.5rem;
   font-weight: 600;
+}
+
+.service-note {
+  background: #fff;
+  border: 1px solid #eadde5;
+  border-radius: 12px;
+  margin: 0 0 0.8rem;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.loading-strip {
+  background: #1a1a1a;
+  border-radius: 999px;
+  bottom: 1rem;
+  color: #fff;
+  font-size: 0.77rem;
+  left: 50%;
+  padding: 0.35rem 0.7rem;
+  position: fixed;
+  transform: translateX(-50%);
 }
 
 @media (min-width: 720px) {
